@@ -168,6 +168,11 @@ async function viewToday(v) {
   bar.append(prev, mid, next);
   v.append(bar);
 
+  const complete = el('button', 'btn btn--ghost complete-day', 'Complete day →');
+  complete.title = "Didn't stick to the plan today? Move on without ticking everything.";
+  complete.onclick = () => { state.date = shiftDate(state.date, 1); render(); };
+  v.append(complete);
+
   const card = el('div', 'card');
   d.meals.forEach(m => card.append(mealRow(m)));
   v.append(card);
@@ -297,21 +302,23 @@ function mealRow(m) {
 /* ---- Week ---- */
 
 const DAY_NAMES = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
+const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 async function viewWeek(v) {
   const p = state.plan;
   renderLedger(state.day ? state.day.eatenKcal : 0, p.targetKcal,
                state.day ? state.day.eatenProtein : 0, p.targetProtein);
   v.innerHTML = '';
-  v.append(el('h2', 'section-title', 'The week'));
+  v.append(el('h2', 'section-title', 'Coming up'));
   v.append(el('p', 'muted', `${p.label} · ${p.targetKcal} kcal and ${p.targetProtein} g protein a day · ${p.windowNote}`));
 
-  const todayKey = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][(new Date().getDay() + 6) % 7];
-  for (const key of Object.keys(DAY_NAMES)) {
+  for (let i = 0; i < 7; i++) {
+    const d = shiftDate(today(), i);
+    const key = DAY_KEYS[(new Date(d + 'T00:00:00').getDay() + 6) % 7];
     const day = p.week[key];
-    const card = el('div', 'card' + (key === todayKey ? ' is-today' : ''));
+    const card = el('div', 'card' + (i === 0 ? ' is-today' : ''));
     const head = el('div', 'weekday');
-    head.append(el('span', 'weekday__name', DAY_NAMES[key]));
+    head.append(el('span', 'weekday__name', prettyDate(d)));
     head.append(el('span', 'weekday__sum', `${day.kcal} kcal · ${Math.round(day.protein)} g`));
     card.append(head);
     day.meals.forEach(m => {

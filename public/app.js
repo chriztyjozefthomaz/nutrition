@@ -94,24 +94,39 @@ async function boot() {
 
 /* -------------------------------------------------------------- ledger */
 
+function calorieGauge(eatenK, targetK) {
+  const N = 32;
+  const W = 260, H = 154, cx = 130, cy = 142, rOuter = 122, rInner = 86;
+  const pct = Math.max(0, Math.min(1, targetK > 0 ? eatenK / targetK : 0));
+  const filled = Math.round(pct * N);
+  let s = `<svg class="gauge" viewBox="0 0 ${W} ${H}" role="img" aria-label="Calories eaten today">`;
+  for (let i = 0; i < N; i++) {
+    const t = i / (N - 1);
+    const deg = 180 - t * 180;
+    const a = (deg * Math.PI) / 180;
+    const x1 = cx + rInner * Math.cos(a), y1 = cy - rInner * Math.sin(a);
+    const x2 = cx + rOuter * Math.cos(a), y2 = cy - rOuter * Math.sin(a);
+    s += `<line class="seg${i < filled ? ' seg--full' : ''}" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`;
+  }
+  return s + '</svg>';
+}
+
 function renderLedger(eatenK, targetK, eatenP, targetP) {
-  const bar = (label, val, target, unit) => {
-    const cap = Math.max(target * 1.25, val * 1.02, 1);
-    const pct = Math.min(100, val / cap * 100);
-    const notch = Math.min(100, target / cap * 100);
-    const over = val > target * 1.05;
-    return `
-      <div class="ledger__row">
-        <span class="ledger__label">${label}</span>
-        <span class="ledger__val">${Math.round(val)}<small> / ${Math.round(target)}${unit}</small></span>
-        <div class="ledger__track">
-          <div class="ledger__fill${over ? ' is-over' : ''}" style="width:${pct}%"></div>
-          <div class="ledger__notch" style="left:${notch}%"></div>
-        </div>
-      </div>`;
-  };
-  $('#ledger').innerHTML =
-    bar('Calories', eatenK, targetK, '') + bar('Protein', eatenP, targetP, ' g');
+  const over = eatenK > targetK * 1.05;
+  const remaining = Math.round(targetK - eatenK);
+  $('#ledger').innerHTML = `
+    <div class="gauge-wrap">
+      ${calorieGauge(eatenK, targetK)}
+      <div class="gauge-center">
+        <div class="g-date">${prettyDate(state.date)}</div>
+        <b>${Math.round(eatenK)}<span style="font-size:.5em;font-weight:700;color:var(--ink-soft)"> kcal</span></b>
+        <div class="g-goal">Goal ${Math.round(targetK)} kcal</div>
+      </div>
+    </div>
+    <div class="ministat-row">
+      <div class="ministat${over ? ' is-over' : ''}"><b>${remaining >= 0 ? remaining : '+' + Math.abs(remaining)}</b><span>${remaining >= 0 ? 'kcal left' : 'kcal over'}</span></div>
+      <div class="ministat"><b>${Math.round(eatenP)}<span style="font-size:.75em"> / ${Math.round(targetP)}g</span></b><span>Protein</span></div>
+    </div>`;
 }
 
 /* ---------------------------------------------------------------- views */
@@ -222,9 +237,26 @@ async function viewToday(v) {
   v.append(meas);
 }
 
+const MEAL_PALETTE = ['#FCE4D6', '#E4EEE0', '#E1EBF5', '#F3E4F2', '#FBEFD2'];
+function mealStyle(m) {
+  const h = (m.time || m.title || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const hour = parseInt((m.time || '12:00').split(':')[0], 10);
+  let icon = '🍽️';
+  if (/snack/i.test(m.title || '')) icon = '🥤';
+  else if (hour < 11) icon = '🍳';
+  else if (hour < 16) icon = '🥗';
+  else icon = '🍲';
+  return { bg: MEAL_PALETTE[h % MEAL_PALETTE.length], icon };
+}
+
 function mealRow(m) {
   const row = el('div', 'meal' + (m.done ? ' is-done' : ''));
-  const tick = el('button', 'tick', '✓');
+  const { bg, icon } = mealStyle(m);
+  const avatar = el('div', 'meal-avatar');
+  avatar.style.background = bg;
+  avatar.append(document.createTextNode(icon));
+
+  const tick = el('button', 'badge-tick', '✓');
   tick.setAttribute('aria-pressed', String(m.done));
   tick.setAttribute('aria-label', (m.done ? 'Mark not eaten: ' : 'Mark eaten: ') + m.title);
   tick.onclick = async () => {
@@ -238,6 +270,7 @@ function mealRow(m) {
     state.day.eatenKcal = dk; state.day.eatenProtein = dp;
     renderLedger(dk, state.day.targetKcal, dp, state.day.targetProtein);
   };
+  avatar.append(tick);
 
   const mid = el('div');
   mid.append(el('div', 'meal__time', m.time));
@@ -257,7 +290,7 @@ function mealRow(m) {
   right.append(el('b', null, m.kcal + ''));
   right.append(el('span', null, Math.round(m.protein) + ' g protein'));
 
-  row.append(tick, mid, right);
+  row.append(avatar, mid, right);
   return row;
 }
 

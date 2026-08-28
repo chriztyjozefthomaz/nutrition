@@ -1,0 +1,38 @@
+services:
+  app:
+    build: .
+    # If you push to GHCR instead of building on the VPS, swap the line above for:
+    # image: ghcr.io/chriztyjozefthomaz/nutrition:latest
+    # pull_policy: always
+    restart: unless-stopped
+
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DB_PATH: /data/nutrition.db
+      SESSION_SECRET: "${SESSION_SECRET}"
+      SEED_USERS: "${SEED_USERS}"
+
+    volumes:
+      - nutrition-data:/data
+
+    expose:
+      - "3000"
+
+    networks:
+      - nutrition-internal
+
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.nutrition.entrypoints: "websecure"
+      traefik.http.routers.nutrition.rule: "Host(`${APP_DOMAIN}`)"
+      traefik.http.routers.nutrition.tls: "true"
+      traefik.http.routers.nutrition.tls.certresolver: "letsencrypt"
+      traefik.http.services.nutrition.loadbalancer.server.port: "3000"
+
+networks:
+  nutrition-internal:
+    driver: bridge
+
+volumes:
+  nutrition-data:

@@ -1,0 +1,16 @@
+{
+  "name": "nutrition-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Two-person nutrition tracker — meal logging, weight trend, shopping list",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "DB_PATH=./dev.db COOKIE_SECURE=false node src/server.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "better-sqlite3": "^11.5.0",
+    "express": "^4.21.1"
+  }
+}

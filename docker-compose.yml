@@ -1,9 +1,7 @@
 services:
   app:
-    build: .
-    # If you push to GHCR instead of building on the VPS, swap the line above for:
-    # image: ghcr.io/chriztyjozefthomaz/nutrition:latest
-    # pull_policy: always
+    image: ghcr.io/chriztyjozefthomaz/nutrition:latest
+    pull_policy: always
     restart: unless-stopped
 
     environment:

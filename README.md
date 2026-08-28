@@ -34,32 +34,14 @@ and the shopping list all follow.
 Traefik is already running on this box with the `letsencrypt` resolver, so the app
 only needs labels — no nginx, no certbot.
 
-1. **Point DNS.** Create an A record for your domain at `147.93.46.40` and let it
-   propagate before step 4, or the certificate request will fail.
+The image builds and publishes to `ghcr.io/chriztyjozefthomaz/nutrition:latest` via
+[.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml) on every
+push to `main`. The VPS project (managed through Hostinger's API, not SSH) pulls
+`latest` and recreates the container — `SESSION_SECRET`, `SEED_USERS`, and
+`APP_DOMAIN` are stored as that project's environment, not in a `.env` file on disk.
 
-2. **Copy the project to the VPS:**
-   ```
-   scp -r nutrition root@147.93.46.40:/docker/nutrition
-   ```
-
-3. **Write the environment file:**
-   ```
-   cd /docker/nutrition
-   cp .env.example .env
-   openssl rand -base64 48        # paste into SESSION_SECRET
-   nano .env                      # set APP_DOMAIN and real passwords
-   ```
-
-4. **Start it:**
-   ```
-   docker compose up -d --build
-   docker compose logs -f app
-   ```
-   The log should show `Seeded user:` twice, then `listening on 3000`. Traefik picks
-   up the container within a few seconds and issues the certificate on first request.
-
-5. **Blank `SEED_USERS`** in `.env` once you have both logged in. It is ignored after
-   the first boot, but there is no reason to leave passwords sitting in a file.
+To ship a change: push to `main`, wait for the Actions run to finish, then trigger a
+redeploy (pulls the new image and recreates the container, volumes untouched).
 
 ## Changing the plan
 

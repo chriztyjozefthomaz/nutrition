@@ -374,7 +374,7 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 app.use(express.static(path.join(__dirname, '..', 'public'), {
   maxAge: '1h',
-  setHeaders: (res, p) => { if (p.endsWith('sw.js')) res.setHeader('Cache-Control', 'no-cache'); }
+  setHeaders: (res, p) => { if (p.endsWith('sw.js') || p.endsWith('manifest.webmanifest')) res.setHeader('Cache-Control', 'no-cache'); }
 }));
 app.get('*', (_req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));
 

@@ -1,6 +1,6 @@
 /* App-shell cache only. All /api traffic goes to the network so two
    phones never disagree about what has been ticked. */
-const CACHE = 'ledger-v1';
+const CACHE = 'ledger-v2';
 const SHELL = ['/', '/style.css', '/app.js', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', e => {

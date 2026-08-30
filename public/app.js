@@ -560,10 +560,15 @@ $('#lg-user').addEventListener('keydown', e => { if (e.key === 'Enter') $('#lg-p
 $('#signout').onclick = async () => { await api('/logout', { method: 'POST' }); location.reload(); };
 
 /* ---------------------------------------------------------- orientation */
-/* Manual fallback for devices where the manifest's own orientation hint
-   doesn't stick (stale WebAPK, OS rotation lock, opened in a plain tab
-   instead of installed). Requires the Screen Orientation API, which
-   Chrome only allows to lock from an installed/standalone app. */
+/* Manual landscape lock for the wall tablet. Chrome on Android grants
+   screen.orientation.lock() only to a fullscreen document — being an
+   installed app is not enough — so a refused lock is retried after
+   taking fullscreen. Both calls spend the click's user activation, so
+   nothing slow may run before them. */
+
+const canLock = () => !!(screen.orientation && typeof screen.orientation.lock === 'function');
+const isInstalled = () => matchMedia('(display-mode: standalone)').matches
+  || matchMedia('(display-mode: fullscreen)').matches;
 
 function updateRotateBtn() {
   const locked = localStorage.getItem('lockLandscape') === '1';
@@ -574,32 +579,42 @@ function updateRotateBtn() {
   btn.setAttribute('aria-label', label);
 }
 
-async function toggleOrientationLock() {
-  const lockable = screen.orientation && typeof screen.orientation.lock === 'function';
-  if (!lockable) {
-    toast("This browser can't lock rotation — install the app to your home screen first.");
-    return;
-  }
-  const wantLock = localStorage.getItem('lockLandscape') !== '1';
-  try {
-    if (wantLock) {
-      await screen.orientation.lock('landscape');
-      localStorage.setItem('lockLandscape', '1');
-      toast('Landscape locked');
-    } else {
-      screen.orientation.unlock();
-      localStorage.removeItem('lockLandscape');
-      toast('Rotation unlocked');
-    }
-  } catch {
-    toast("Couldn't lock rotation from here — open the installed app, not a browser tab.");
-  }
+async function unlockOrientation() {
+  try { screen.orientation.unlock(); } catch {}
+  if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch {} }
+  localStorage.removeItem('lockLandscape');
   updateRotateBtn();
+  toast('Rotation unlocked');
 }
 
-$('#rotate').onclick = toggleOrientationLock;
+async function lockLandscape() {
+  try {
+    await screen.orientation.lock('landscape');
+  } catch {
+    try {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      await screen.orientation.lock('landscape');
+    } catch (e) {
+      toast(isInstalled()
+        ? `Android refused the lock (${e.name || 'error'}). Check auto-rotate is on in quick settings.`
+        : 'Install the app to your home screen first — a browser tab cannot lock rotation.');
+      return;
+    }
+  }
+  localStorage.setItem('lockLandscape', '1');
+  updateRotateBtn();
+  toast('Landscape locked');
+}
+
+$('#rotate').onclick = () => {
+  if (!canLock()) { toast("This browser cannot lock rotation."); return; }
+  if (localStorage.getItem('lockLandscape') === '1') unlockOrientation();
+  else lockLandscape();
+};
 updateRotateBtn();
-if (localStorage.getItem('lockLandscape') === '1' && screen.orientation && screen.orientation.lock) {
+/* Re-apply on launch. Succeeds only where the lock needs no fullscreen;
+   elsewhere the button is one tap away. */
+if (localStorage.getItem('lockLandscape') === '1' && canLock()) {
   screen.orientation.lock('landscape').catch(() => {});
 }
 

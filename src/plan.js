@@ -64,30 +64,30 @@ function meal(id, time, title, items, note) {
 /* ---------------------------------------------------------------- Plan A */
 
 const A = {
-  breakfastEggs: () => meal('a-bfast',  '12:00', 'Egg scramble + 2 rotis',
+  breakfastEggs: () => meal('a-bfast',  '11:00', 'Egg scramble + 2 rotis',
                      [['egg', 3], ['egg_white', 3], ['onion', 40], ['tomato', 50], ['spinach', 40], ['oil', 1], ['roti', 2]],
                      'Moderate heat, stir slowly.'),
-  breakfastOats: () => meal('a-bfast-oats', '12:00', 'Overnight oats jar + isolate',
+  breakfastOats: () => meal('a-bfast-oats', '11:00', 'Overnight oats jar + isolate',
                      [['oats', 65], ['milk', 200], ['curd', 60], ['chia', 10], ['berries', 60], ['isolate', 30]],
                      'Stir the isolate in fresh each morning.'),
-  shake:       () => meal('a-shake',  '15:00', 'Protein shake + banana + 15 almonds',
+  shake:       () => meal('a-shake',  '14:00', 'Protein shake + banana + 15 almonds',
                      [['isolate', 30], ['banana', 1], ['almond', 15]]),
-  curdFruit:   () => meal('a-curd',   '15:00', 'Curd + banana + 12 almonds',
+  curdFruit:   () => meal('a-curd',   '14:00', 'Curd + banana + 12 almonds',
                      [['curd', 200], ['banana', 1], ['almond', 12]]),
-  main:        () => meal('a-main',   '18:30', 'Chicken + rice + vegetables + salad',
+  main:        () => meal('a-main',   '16:30', 'Chicken + rice + vegetables + salad',
                      [['chicken_raw', 220], ['rice_raw', 55], ['veg_mix', 150], ['salad_mix', 120], ['olive_oil', 1]],
                      '220 g raw is about 165 g cooked.'),
-  mainRoti:    () => meal('a-main-r', '18:30', 'Chicken + 2 rotis + vegetables + salad',
+  mainRoti:    () => meal('a-main-r', '16:30', 'Chicken + 2 rotis + vegetables + salad',
                      [['chicken_raw', 220], ['roti', 2], ['veg_mix', 150], ['salad_mix', 120], ['olive_oil', 1]]),
-  dinFish:     () => meal('a-din-f',  '20:00', 'Fish + roasted vegetables + rice',
+  dinFish:     () => meal('a-din-f',  '19:00', 'Fish + roasted vegetables + rice',
                      [['fish_raw', 180], ['veg_mix', 150], ['rice_raw', 75], ['oil', 1], ['olive_oil', 1]]),
-  dinDal:      () => meal('a-din-d',  '20:00', 'Dal + 2 rotis + curd + salad',
+  dinDal:      () => meal('a-din-d',  '19:00', 'Dal + 2 rotis + curd + salad',
                      [['dal_raw', 60], ['ghee', 1], ['onion', 30], ['tomato', 40], ['roti', 2], ['curd', 100], ['salad_mix', 120]]),
-  dinBhurji:   () => meal('a-din-cb', '20:00', 'Chicken bhurji + roti + rice + salad',
+  dinBhurji:   () => meal('a-din-cb', '19:00', 'Chicken bhurji + roti + rice + salad',
                      [['chicken_raw', 165], ['onion', 40], ['tomato', 50], ['oil', 2], ['roti', 2], ['rice_raw', 20], ['salad_mix', 120]]),
-  dinChicken:  () => meal('a-din-c',  '20:00', 'Chicken + large salad',
+  dinChicken:  () => meal('a-din-c',  '19:00', 'Chicken + large salad',
                      [['chicken_raw', 200], ['salad_mix', 200], ['olive_oil', 1]]),
-  flex:        () => ({ ...meal('a-flex', '18:30', 'Flexible meal — eat what you want', []),
+  flex:        () => ({ ...meal('a-flex', '16:30', 'Flexible meal — eat what you want', []),
                      kcal: 800, protein: 45, estimate: true,
                      note: 'Counted as an 800 kcal estimate. Log the real thing under Extras if you want it exact.' })
 };
@@ -142,8 +142,11 @@ const PLANS = {
     label: PLAN_NAMES.A,
     targetKcal: 1950,
     targetProtein: 165,
-    window: '12:00 – 20:00',
-    windowNote: '16:8 — black coffee, tea and water outside it.',
+    window: '11:00 – 19:00',
+    /* Shifted from 12:00–20:00 for a 10:00 training slot: the old window
+       opened two hours after the session and pushed the last two meals
+       90 minutes apart. Still an 8-hour window, so 16:8 is unchanged. */
+    windowNote: '16:8 — training is at 10:00, so the 11:00 meal is the post-workout one. Black coffee, tea and water outside the window.',
     week: {
       mon: [A.breakfastOats(), A.shake(), A.main(), A.dinFish()],
       tue: [A.breakfastEggs(), A.curdFruit(), A.mainRoti(), A.dinDal()],

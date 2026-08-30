@@ -4,7 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
 const Database = require('better-sqlite3');
-const { PLANS, RECIPES, PREP, DAYS, SHOP_ORDER, FOODS, round } = require('./plan');
+const { PLANS, PLAN_NAMES, RECIPES, PREP, DAYS, SHOP_ORDER, FOODS, round } = require('./plan');
 
 const PORT = process.env.PORT || 3000;
 const DB_PATH = process.env.DB_PATH || '/data/nutrition.db';
@@ -175,7 +175,15 @@ app.post('/api/logout', (req, res) => {
 
 app.get('/api/me', (req, res) => {
   if (!req.user) return res.json({ user: null });
-  res.json({ user: publicUser(req.user), plan: summarisePlan(PLANS[req.user.plan_key]) });
+  res.json({
+    user: publicUser(req.user),
+    plan: summarisePlan(PLANS[req.user.plan_key]),
+    planNames: PLAN_NAMES,
+    planTargets: {
+      A: { kcal: PLANS.A.targetKcal, protein: PLANS.A.targetProtein },
+      B: { kcal: PLANS.B.targetKcal, protein: PLANS.B.targetProtein }
+    }
+  });
 });
 
 function summarisePlan(plan) {
@@ -196,19 +204,36 @@ function summarisePlan(plan) {
 
 /* ---------------------------------------------------------------- day */
 
-app.get('/api/day/:date', requireUser, (req, res) => {
-  const { date } = req.params;
-  if (!isDate(date)) return res.status(400).json({ error: 'Date must be YYYY-MM-DD' });
-  const plan = PLANS[req.user.plan_key];
+/* The shared Kitchen login is a terminal onto the two real accounts,
+   not a third ledger. A tick there is written to whoever owns that
+   plan, so the tablet and that person's own phone read the same log. */
+const ownerOf = planKey =>
+  db.prepare('SELECT id FROM users WHERE plan_key = ? ORDER BY id LIMIT 1').get(planKey);
+
+function writeTarget(user, planKey) {
+  if (user.plan_key !== 'KITCHEN' || !PLANS[planKey] || planKey === 'KITCHEN') return user.id;
+  const owner = ownerOf(planKey);
+  return owner ? owner.id : user.id;
+}
+
+/* Rows the caller may delete: their own, plus both people's when the
+   caller is the Kitchen terminal. */
+function reachableUserIds(user) {
+  if (user.plan_key !== 'KITCHEN') return [user.id];
+  const ids = db.prepare("SELECT id FROM users WHERE plan_key IN ('A', 'B')").all().map(r => r.id);
+  return ids.concat(user.id);
+}
+
+function dayFor(userId, plan, planKey, date) {
   const meals = plan.week[dayKey(date)];
   const ticked = new Set(
     db.prepare('SELECT meal_id FROM meal_log WHERE user_id = ? AND date = ?')
-      .all(req.user.id, date).map(r => r.meal_id)
+      .all(userId, date).map(r => r.meal_id)
   );
   const extras = db.prepare('SELECT id, label, kcal, protein FROM extras WHERE user_id = ? AND date = ? ORDER BY id')
-    .all(req.user.id, date);
-  const weight = db.prepare('SELECT kg FROM weights WHERE user_id = ? AND date = ?').get(req.user.id, date);
-  const w = db.prepare('SELECT cm FROM waist WHERE user_id = ? AND date = ?').get(req.user.id, date);
+    .all(userId, date);
+  const weight = db.prepare('SELECT kg FROM weights WHERE user_id = ? AND date = ?').get(userId, date);
+  const w = db.prepare('SELECT cm FROM waist WHERE user_id = ? AND date = ?').get(userId, date);
 
   const list = meals.map(m => ({
     id: m.id, time: m.time, title: m.title, kcal: m.kcal, protein: m.protein,
@@ -221,14 +246,34 @@ app.get('/api/day/:date', requireUser, (req, res) => {
   const eatenP = list.filter(m => m.done).reduce((a, m) => a + m.protein, 0)
     + extras.reduce((a, e) => a + e.protein, 0);
 
-  res.json({
-    date, dayKey: dayKey(date), meals: list, extras,
+  return {
+    plan: planKey, name: plan.label, meals: list, extras,
     weight: weight ? weight.kg : null, waist: w ? w.cm : null,
     targetKcal: plan.targetKcal, targetProtein: plan.targetProtein,
     plannedKcal: list.reduce((a, m) => a + m.kcal, 0),
     plannedProtein: round(list.reduce((a, m) => a + m.protein, 0), 1),
     eatenKcal: eatenK, eatenProtein: round(eatenP, 1),
     window: plan.window
+  };
+}
+
+app.get('/api/day/:date', requireUser, (req, res) => {
+  const { date } = req.params;
+  if (!isDate(date)) return res.status(400).json({ error: 'Date must be YYYY-MM-DD' });
+
+  if (req.user.plan_key === 'KITCHEN') {
+    return res.json({
+      date, dayKey: dayKey(date), kitchen: true,
+      columns: ['A', 'B'].map(k => {
+        const owner = ownerOf(k);
+        return { ...dayFor(owner ? owner.id : req.user.id, PLANS[k], k, date), linked: !!owner };
+      })
+    });
+  }
+
+  res.json({
+    date, dayKey: dayKey(date),
+    ...dayFor(req.user.id, PLANS[req.user.plan_key], req.user.plan_key, date)
   });
 });
 
@@ -237,14 +282,16 @@ app.post('/api/day/:date/meal', requireUser, (req, res) => {
   const { mealId, done } = req.body;
   if (!isDate(date)) return res.status(400).json({ error: 'Date must be YYYY-MM-DD' });
   const plan = PLANS[req.user.plan_key];
-  if (!plan.week[dayKey(date)].some(m => m.id === mealId))
+  const meal = plan.week[dayKey(date)].find(m => m.id === mealId);
+  if (!meal)
     return res.status(400).json({ error: 'That meal is not on the plan for this day' });
+  const uid = writeTarget(req.user, meal.plan);
   if (done) {
     db.prepare('INSERT OR IGNORE INTO meal_log (user_id, date, meal_id) VALUES (?, ?, ?)')
-      .run(req.user.id, date, mealId);
+      .run(uid, date, mealId);
   } else {
     db.prepare('DELETE FROM meal_log WHERE user_id = ? AND date = ? AND meal_id = ?')
-      .run(req.user.id, date, mealId);
+      .run(uid, date, mealId);
   }
   res.json({ ok: true });
 });
@@ -273,13 +320,16 @@ app.post('/api/day/:date/extra', requireUser, (req, res) => {
   const protein = Math.max(0, Math.min(400, Number(req.body.protein) || 0));
   if (!isDate(req.params.date)) return res.status(400).json({ error: 'Date must be YYYY-MM-DD' });
   if (!label) return res.status(400).json({ error: 'Give the entry a name' });
+  const uid = writeTarget(req.user, req.body.plan);
   const r = db.prepare('INSERT INTO extras (user_id, date, label, kcal, protein) VALUES (?, ?, ?, ?, ?)')
-    .run(req.user.id, req.params.date, label, kcal, protein);
+    .run(uid, req.params.date, label, kcal, protein);
   res.json({ id: r.lastInsertRowid });
 });
 
 app.delete('/api/extra/:id', requireUser, (req, res) => {
-  db.prepare('DELETE FROM extras WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
+  const ids = reachableUserIds(req.user);
+  db.prepare(`DELETE FROM extras WHERE id = ? AND user_id IN (${ids.map(() => '?').join(',')})`)
+    .run(req.params.id, ...ids);
   res.json({ ok: true });
 });
 

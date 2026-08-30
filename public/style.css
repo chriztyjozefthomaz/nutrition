@@ -201,6 +201,29 @@ button { font: inherit; cursor: pointer; }
 }
 .gauge-center .g-goal { font-size: .8rem; font-weight: 700; color: var(--coral); }
 
+.g-unit { font-size: .5em; font-weight: 700; color: var(--ink-soft); }
+
+/* Two meters side by side for the shared Kitchen login. */
+.ledger-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.ledger-pair .gauge-wrap { max-width: 215px; }
+.ledger-pair .gauge-center b { font-size: 1.5rem; }
+.ledger-pair .ministat-row { gap: 8px; }
+.ledger-pair .ministat { padding: 8px 10px; }
+.ledger-pair .ministat b { font-size: .95rem; }
+@media (max-width: 560px) { .ledger-pair { grid-template-columns: 1fr; } }
+
+.kitchen-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+@media (max-width: 760px) { .kitchen-cols { grid-template-columns: 1fr; } }
+.kitchen-col__head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; flex-wrap: wrap; margin-bottom: 14px;
+}
+/* Halved columns leave no room for the four-across extras form. */
+.kitchen-col .row3 { grid-template-columns: 1fr 1fr; }
+.kitchen-col .row3 > :last-child { grid-column: 1 / -1; }
+
+.extras { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, .07); }
+
 .ministat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0 14px; }
 .ministat {
   background: var(--glass);

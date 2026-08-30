@@ -131,10 +131,15 @@ const B = {
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
+/* Whose plan each key belongs to. Single source of truth: the plan
+   labels below, the per-meal tags in the shared Kitchen view and the
+   shopping-list chips all read from here. */
+const PLAN_NAMES = { A: 'Christy', B: 'Mabel' };
+
 const PLANS = {
   A: {
     key: 'A',
-    label: 'Plan A',
+    label: PLAN_NAMES.A,
     targetKcal: 1950,
     targetProtein: 165,
     window: '12:00 – 20:00',
@@ -151,7 +156,7 @@ const PLANS = {
   },
   B: {
     key: 'B',
-    label: 'Plan B',
+    label: PLAN_NAMES.B,
     targetKcal: 1500,
     targetProtein: 120,
     window: '09:00 – 19:00',
@@ -174,7 +179,7 @@ const PLANS = {
    either person's own log. */
 PLANS.KITCHEN = {
   key: 'KITCHEN',
-  label: 'Both plans',
+  label: `${PLAN_NAMES.A} & ${PLAN_NAMES.B}`,
   targetKcal: PLANS.A.targetKcal + PLANS.B.targetKcal,
   targetProtein: PLANS.A.targetProtein + PLANS.B.targetProtein,
   window: 'All day',
@@ -280,7 +285,7 @@ const RECIPES = [
   {
     id: 'fish', name: 'Pan-seared masala fish', yield: '1 portion', tag: 'Cook fresh', time: '6 min',
     ingredients: [
-      'Fish fillet — 180 g (Plan A) or 170 g (Plan B)', 'Turmeric — ½ tsp',
+      `Fish fillet — 180 g (${PLAN_NAMES.A}) or 170 g (${PLAN_NAMES.B})`, 'Turmeric — ½ tsp',
       'Red chilli powder — ½ tsp', 'Salt', 'Lemon juice — 1 tsp', 'Oil — 1 tsp'
     ],
     steps: [
@@ -358,4 +363,4 @@ const PREP = {
 
 const SHOP_ORDER = ['Protein', 'Carbs', 'Vegetables', 'Fruit', 'Pantry', 'Supplements'];
 
-module.exports = { FOODS, PLANS, RECIPES, PREP, DAYS, SHOP_ORDER, round };
+module.exports = { FOODS, PLANS, PLAN_NAMES, RECIPES, PREP, DAYS, SHOP_ORDER, round };

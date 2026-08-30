@@ -85,10 +85,18 @@ async function boot() {
   if (!me.user) { showSignin(); return; }
   state.user = me.user;
   state.plan = me.plan;
+  state.planNames = me.planNames || { A: 'Plan A', B: 'Plan B' };
+  state.planTargets = me.planTargets || { A: { kcal: 0, protein: 0 }, B: { kcal: 0, protein: 0 } };
   state.shop.plans = me.user.planKey === 'KITCHEN' ? ['A', 'B'] : [me.user.planKey];
   $('#signin').hidden = true;
   $('#app').hidden = false;
-  $('#top-eyebrow').textContent = `${me.user.displayName} · ${me.plan.label}`;
+  /* Plan labels are people's names now, so pairing one with the account's
+     display name stutters ("Mabel · Mabel"). Only the shared Kitchen
+     login, where the two differ, still shows both. */
+  $('#top-eyebrow').textContent = me.user.planKey === 'KITCHEN'
+    ? `${me.user.displayName} · ${me.plan.label}`
+    : me.plan.label;
+  keepScreenOn();
   render();
 }
 
@@ -111,22 +119,50 @@ function calorieGauge(eatenK, targetK) {
   return s + '</svg>';
 }
 
-function renderLedger(eatenK, targetK, eatenP, targetP) {
-  const over = eatenK > targetK * 1.05;
-  const remaining = Math.round(targetK - eatenK);
-  $('#ledger').innerHTML = `
-    <div class="gauge-wrap">
-      ${calorieGauge(eatenK, targetK)}
-      <div class="gauge-center">
-        <div class="g-date">${prettyDate(state.date)}</div>
-        <b>${Math.round(eatenK)}<span style="font-size:.5em;font-weight:700;color:var(--ink-soft)"> kcal</span></b>
-        <div class="g-goal">Goal ${Math.round(targetK)} kcal</div>
+/* One meter. `col` is any object carrying eaten/target totals — a
+   whole day for a personal login, or one person's column in the
+   shared Kitchen view. */
+function gaugeBlock(col, title) {
+  const over = col.eatenKcal > col.targetKcal * 1.05;
+  const remaining = Math.round(col.targetKcal - col.eatenKcal);
+  return `
+    <div class="ledger-block">
+      <div class="gauge-wrap">
+        ${calorieGauge(col.eatenKcal, col.targetKcal)}
+        <div class="gauge-center">
+          <div class="g-date">${esc(title)}</div>
+          <b>${Math.round(col.eatenKcal)}<span class="g-unit"> kcal</span></b>
+          <div class="g-goal">Goal ${Math.round(col.targetKcal)} kcal</div>
+        </div>
       </div>
-    </div>
-    <div class="ministat-row">
-      <div class="ministat${over ? ' is-over' : ''}"><b>${remaining >= 0 ? remaining : '+' + Math.abs(remaining)}</b><span>${remaining >= 0 ? 'kcal left' : 'kcal over'}</span></div>
-      <div class="ministat"><b>${Math.round(eatenP)}<span style="font-size:.75em"> / ${Math.round(targetP)}g</span></b><span>Protein</span></div>
+      <div class="ministat-row">
+        <div class="ministat${over ? ' is-over' : ''}"><b>${remaining >= 0 ? remaining : '+' + Math.abs(remaining)}</b><span>${remaining >= 0 ? 'kcal left' : 'kcal over'}</span></div>
+        <div class="ministat"><b>${Math.round(col.eatenProtein)}<span style="font-size:.75em"> / ${Math.round(col.targetProtein)}g</span></b><span>Protein</span></div>
+      </div>
     </div>`;
+}
+
+const emptyCol = k => ({
+  eatenKcal: 0, eatenProtein: 0,
+  targetKcal: state.planTargets[k].kcal, targetProtein: state.planTargets[k].protein
+});
+
+function drawLedger() {
+  const d = state.day;
+  const pair = html => `<div class="ledger-pair">${html}</div>`;
+
+  if (d && d.kitchen) {
+    $('#ledger').innerHTML = pair(d.columns.map(c => gaugeBlock(c, c.name)).join(''));
+  } else if (d) {
+    $('#ledger').innerHTML = gaugeBlock(d, prettyDate(state.date));
+  } else if (state.user.planKey === 'KITCHEN') {
+    /* A tab other than Today opened first, so no day is loaded yet. */
+    $('#ledger').innerHTML = pair(['A', 'B'].map(k => gaugeBlock(emptyCol(k), state.planNames[k])).join(''));
+  } else {
+    $('#ledger').innerHTML = gaugeBlock(
+      { eatenKcal: 0, eatenProtein: 0, targetKcal: state.plan.targetKcal, targetProtein: state.plan.targetProtein },
+      prettyDate(state.date));
+  }
 }
 
 /* ---------------------------------------------------------------- views */
@@ -136,6 +172,7 @@ async function render() {
     t.setAttribute('aria-selected', String(t.dataset.view === state.view)));
   const v = $('#view');
   v.innerHTML = '<p class="empty">Loading…</p>';
+  drawLedger();
   try {
     if (state.view === 'today') await viewToday(v);
     else if (state.view === 'week') await viewWeek(v);
@@ -149,39 +186,34 @@ async function render() {
 
 /* ---- Today ---- */
 
-async function viewToday(v) {
-  const d = await api('/day/' + state.date);
-  state.day = d;
-  renderLedger(d.eatenKcal, d.targetKcal, d.eatenProtein, d.targetProtein);
-
-  v.innerHTML = '';
-
+function dateBar(subtitle) {
   const bar = el('div', 'datebar');
   const prev = el('button', 'arrow', '‹'); prev.setAttribute('aria-label', 'Previous day');
   const next = el('button', 'arrow', '›'); next.setAttribute('aria-label', 'Next day');
   next.disabled = state.date >= today();
   const mid = el('div');
   mid.append(el('h2', null, prettyDate(state.date)));
-  mid.append(el('p', 'muted', `Eating window ${d.window} · plan totals ${d.plannedKcal} kcal, ${Math.round(d.plannedProtein)} g protein`));
+  mid.append(el('p', 'muted', subtitle));
   prev.onclick = () => { state.date = shiftDate(state.date, -1); render(); };
   next.onclick = () => { state.date = shiftDate(state.date, 1); render(); };
   bar.append(prev, mid, next);
-  v.append(bar);
+  return bar;
+}
 
-  const complete = el('button', 'btn btn--ghost complete-day', 'Complete day →');
-  complete.title = "Didn't stick to the plan today? Move on without ticking everything.";
-  complete.onclick = () => { state.date = shiftDate(state.date, 1); render(); };
-  v.append(complete);
+function completeDayBtn() {
+  const b = el('button', 'btn btn--ghost complete-day', 'Complete day →');
+  b.title = "Didn't stick to the plan today? Move on without ticking everything.";
+  b.onclick = () => { state.date = shiftDate(state.date, 1); render(); };
+  return b;
+}
 
-  const card = el('div', 'card');
-  d.meals.forEach(m => card.append(mealRow(m)));
-  v.append(card);
-
-  /* extras */
-  const ex = el('div', 'card');
-  ex.append(el('h3', null, 'Anything else'));
-  ex.append(el('p', 'tiny', 'Off-plan food, a flexible meal, a coffee with milk. It counts the same.'));
-  d.extras.forEach(e => {
+/* Off-plan entries. `col` decides whose log they land in — in the
+   Kitchen view each person's block posts its own plan key. */
+function extrasBlock(col) {
+  const wrap = el('div', 'extras');
+  wrap.append(el('h3', null, 'Anything else'));
+  wrap.append(el('p', 'tiny', 'Off-plan food, a flexible meal, a coffee with milk. It counts the same.'));
+  col.extras.forEach(e => {
     const row = el('div', 'extra');
     row.append(el('span', null, e.label));
     const right = el('span');
@@ -191,7 +223,7 @@ async function viewToday(v) {
     x.onclick = async () => { await api('/extra/' + e.id, { method: 'DELETE' }); render(); };
     right.append(' ', x);
     row.append(right);
-    ex.append(row);
+    wrap.append(row);
   });
   const form = el('div', 'row3');
   const l = el('input', 'num'); l.placeholder = 'What was it?';
@@ -200,12 +232,53 @@ async function viewToday(v) {
   const add = el('button', 'btn btn--ghost btn--sm', 'Add');
   add.onclick = async () => {
     if (!l.value.trim()) { toast('Give the entry a name'); return; }
-    await api(`/day/${state.date}/extra`, { body: { label: l.value, kcal: k.value, protein: p.value } });
+    await api(`/day/${state.date}/extra`, {
+      body: { label: l.value, kcal: k.value, protein: p.value, plan: col.plan }
+    });
     render();
   };
   form.append(l, k, p, add);
-  ex.append(form);
-  v.append(ex);
+  wrap.append(form);
+  return wrap;
+}
+
+function personColumn(col) {
+  const card = el('div', 'card kitchen-col');
+  const head = el('div', 'kitchen-col__head');
+  head.append(el('span', 'who-tag who-tag--' + col.plan, col.name));
+  head.append(el('span', 'tiny', `${col.window} · ${col.plannedKcal} kcal planned`));
+  card.append(head);
+  col.meals.forEach(m => card.append(mealRow(m, col)));
+  card.append(extrasBlock(col));
+  return card;
+}
+
+async function viewToday(v) {
+  const d = await api('/day/' + state.date);
+  state.day = d;
+  drawLedger();
+  v.innerHTML = '';
+
+  if (d.kitchen) {
+    v.append(dateBar(d.columns.map(c => `${c.name} ${c.plannedKcal} kcal`).join(' · ')));
+    v.append(completeDayBtn());
+    const cols = el('div', 'kitchen-cols');
+    d.columns.forEach(c => cols.append(personColumn(c)));
+    v.append(cols);
+    const unlinked = d.columns.filter(c => !c.linked).map(c => c.name);
+    v.append(el('p', 'tiny', unlinked.length
+      ? `No account owns ${unlinked.join(' or ')} yet, so those ticks stay on this device.`
+      : 'Each side logs to that person’s own account, so it shows up on their phone too. Weight and waist are logged from their own login.'));
+    return;
+  }
+
+  v.append(dateBar(`Eating window ${d.window} · plan totals ${d.plannedKcal} kcal, ${Math.round(d.plannedProtein)} g protein`));
+  v.append(completeDayBtn());
+
+  const card = el('div', 'card');
+  d.meals.forEach(m => card.append(mealRow(m, d)));
+  card.append(extrasBlock(d));
+  v.append(card);
 
   /* measurements */
   const meas = el('div', 'card');
@@ -262,7 +335,10 @@ function mealStyle(m) {
   return { bg: MEAL_PALETTE[h % MEAL_PALETTE.length], icon };
 }
 
-function mealRow(m) {
+/* `col` is the totals object this meal counts toward: the whole day on
+   a personal login, or one person's column in the Kitchen view — which
+   is what keeps the two meters moving independently. */
+function mealRow(m, col) {
   const row = el('div', 'meal' + (m.done ? ' is-done' : ''));
   const { bg, icon } = mealStyle(m);
   const avatar = el('div', 'meal-avatar');
@@ -274,21 +350,22 @@ function mealRow(m) {
   tick.setAttribute('aria-label', (m.done ? 'Mark not eaten: ' : 'Mark eaten: ') + m.title);
   tick.onclick = async () => {
     const nowDone = !m.done;
+    try {
+      await api(`/day/${state.date}/meal`, { body: { mealId: m.id, done: nowDone } });
+    } catch (e) { toast(e.message); return; }
     m.done = nowDone;
     tick.setAttribute('aria-pressed', String(nowDone));
     row.classList.toggle('is-done', nowDone);
-    await api(`/day/${state.date}/meal`, { body: { mealId: m.id, done: nowDone } });
-    const dk = state.day.eatenKcal + (nowDone ? m.kcal : -m.kcal);
-    const dp = Math.round((state.day.eatenProtein + (nowDone ? m.protein : -m.protein)) * 10) / 10;
-    state.day.eatenKcal = dk; state.day.eatenProtein = dp;
-    renderLedger(dk, state.day.targetKcal, dp, state.day.targetProtein);
+    col.eatenKcal += nowDone ? m.kcal : -m.kcal;
+    col.eatenProtein = Math.round((col.eatenProtein + (nowDone ? m.protein : -m.protein)) * 10) / 10;
+    drawLedger();
   };
   avatar.append(tick);
 
   const mid = el('div');
   const timeRow = el('div', 'meal__timerow');
   timeRow.append(el('span', 'meal__time', m.time));
-  if (m.plan) timeRow.append(el('span', 'who-tag who-tag--' + m.plan, 'Plan ' + m.plan));
+  if (m.plan) timeRow.append(el('span', 'who-tag who-tag--' + m.plan, state.planNames[m.plan]));
   mid.append(timeRow);
   mid.append(el('div', 'meal__title', m.title));
   if (m.note) mid.append(el('p', 'meal__note', m.note));
@@ -317,8 +394,7 @@ const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 async function viewWeek(v) {
   const p = state.plan;
-  renderLedger(state.day ? state.day.eatenKcal : 0, p.targetKcal,
-               state.day ? state.day.eatenProtein : 0, p.targetProtein);
+  drawLedger();
   v.innerHTML = '';
   v.append(el('h2', 'section-title', 'Coming up'));
   v.append(el('p', 'muted', `${p.label} · ${p.targetKcal} kcal and ${p.targetProtein} g protein a day · ${p.windowNote}`));
@@ -335,7 +411,7 @@ async function viewWeek(v) {
     day.meals.forEach(m => {
       const r = el('div', 'weekmeal');
       const left = el('span', null, `${m.time}  ${m.title}`);
-      if (m.plan) left.append(el('span', 'who-tag who-tag--' + m.plan, 'Plan ' + m.plan));
+      if (m.plan) left.append(el('span', 'who-tag who-tag--' + m.plan, state.planNames[m.plan]));
       r.append(left);
       r.append(el('span', null, `${m.kcal} · ${Math.round(m.protein)} g`));
       card.append(r);
@@ -426,10 +502,10 @@ async function viewShop(v) {
   });
   ctl.append(dayChips);
 
-  ctl.append(el('p', 'tiny', 'Plans'));
+  ctl.append(el('p', 'tiny', 'Who'));
   const planChips = el('div', 'chips');
   ['A', 'B'].forEach(k => {
-    const c = el('button', 'chip', 'Plan ' + k);
+    const c = el('button', 'chip', state.planNames[k]);
     c.setAttribute('aria-pressed', String(state.shop.plans.includes(k)));
     c.onclick = () => {
       const i = state.shop.plans.indexOf(k);
@@ -613,6 +689,28 @@ async function lockLandscape() {
   updateRotateBtn();
   toast('Landscape locked');
 }
+
+/* ---------------------------------------------------------- screen on */
+/* The wall tablet should not blank while the app is up. Scoped to the
+   shared Kitchen login, since holding the screen awake flattens a phone
+   battery and the personal logins run on phones. The lock is dropped by
+   the browser whenever the page hides, so it is re-taken on return. */
+
+let wakeLock = null;
+
+async function keepScreenOn() {
+  if (!('wakeLock' in navigator) || wakeLock) return;
+  if (!state.user || state.user.planKey !== 'KITCHEN') return;
+  if (document.visibilityState !== 'visible') return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch { /* refused (low battery, policy) — the screen just sleeps as usual */ }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') keepScreenOn();
+});
 
 $('#rotate').onclick = () => {
   if (!canLock()) { toast("This browser cannot lock rotation."); return; }

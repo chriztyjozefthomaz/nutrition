@@ -242,7 +242,15 @@ async function viewToday(v) {
   v.append(meas);
 }
 
-const MEAL_PALETTE = ['#FCE4D6', '#E4EEE0', '#E1EBF5', '#F3E4F2', '#FBEFD2'];
+/* Tinted glass, not solid fills — the pale pastels this replaced glared
+   against the dark ground. */
+const MEAL_PALETTE = [
+  'rgba(255, 123, 71, .18)',
+  'rgba(126, 200, 140, .16)',
+  'rgba(96, 150, 255, .16)',
+  'rgba(198, 120, 232, .16)',
+  'rgba(233, 169, 74, .18)'
+];
 function mealStyle(m) {
   const h = (m.time || m.title || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   const hour = parseInt((m.time || '12:00').split(':')[0], 10);

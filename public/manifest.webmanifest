@@ -4,8 +4,8 @@
   "description": "Two-person nutrition tracker",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F4EEE5",
-  "theme_color": "#F4EEE5",
+  "background_color": "#08080A",
+  "theme_color": "#08080A",
   "orientation": "any",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

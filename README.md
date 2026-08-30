@@ -1,4 +1,4 @@
-# Kitchen Ledger
+# MCF Kitchen
 
 A two-person nutrition tracker: meal logging, weight trend, progress charts and a
 shopping-list generator built from the plan itself.

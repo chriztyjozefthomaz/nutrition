@@ -139,6 +139,8 @@ button { font: inherit; cursor: pointer; }
   padding: calc(env(safe-area-inset-top) + 14px) var(--pad) 4px;
 }
 .top__row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.top__actions { display: flex; align-items: center; gap: 4px; }
+.iconbtn[aria-pressed="true"] { color: var(--coral); }
 
 .gauge-wrap { position: relative; display: grid; place-items: center; margin: 0 auto; max-width: 300px; }
 .gauge { width: 100%; height: auto; display: block; }

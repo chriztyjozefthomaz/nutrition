@@ -1,6 +1,6 @@
 {
-  "name": "Kitchen Ledger",
-  "short_name": "Ledger",
+  "name": "MCF Kitchen",
+  "short_name": "MCF Kitchen",
   "description": "Two-person nutrition tracker",
   "start_url": "/",
   "display": "standalone",

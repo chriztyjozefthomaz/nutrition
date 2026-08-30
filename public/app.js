@@ -559,6 +559,50 @@ $('#lg-pass').addEventListener('keydown', e => { if (e.key === 'Enter') signIn()
 $('#lg-user').addEventListener('keydown', e => { if (e.key === 'Enter') $('#lg-pass').focus(); });
 $('#signout').onclick = async () => { await api('/logout', { method: 'POST' }); location.reload(); };
 
+/* ---------------------------------------------------------- orientation */
+/* Manual fallback for devices where the manifest's own orientation hint
+   doesn't stick (stale WebAPK, OS rotation lock, opened in a plain tab
+   instead of installed). Requires the Screen Orientation API, which
+   Chrome only allows to lock from an installed/standalone app. */
+
+function updateRotateBtn() {
+  const locked = localStorage.getItem('lockLandscape') === '1';
+  const btn = $('#rotate');
+  btn.setAttribute('aria-pressed', String(locked));
+  const label = locked ? 'Unlock rotation' : 'Lock landscape';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+}
+
+async function toggleOrientationLock() {
+  const lockable = screen.orientation && typeof screen.orientation.lock === 'function';
+  if (!lockable) {
+    toast("This browser can't lock rotation — install the app to your home screen first.");
+    return;
+  }
+  const wantLock = localStorage.getItem('lockLandscape') !== '1';
+  try {
+    if (wantLock) {
+      await screen.orientation.lock('landscape');
+      localStorage.setItem('lockLandscape', '1');
+      toast('Landscape locked');
+    } else {
+      screen.orientation.unlock();
+      localStorage.removeItem('lockLandscape');
+      toast('Rotation unlocked');
+    }
+  } catch {
+    toast("Couldn't lock rotation from here — open the installed app, not a browser tab.");
+  }
+  updateRotateBtn();
+}
+
+$('#rotate').onclick = toggleOrientationLock;
+updateRotateBtn();
+if (localStorage.getItem('lockLandscape') === '1' && screen.orientation && screen.orientation.lock) {
+  screen.orientation.lock('landscape').catch(() => {});
+}
+
 boot().catch(showSignin);
 
 if ('serviceWorker' in navigator) {

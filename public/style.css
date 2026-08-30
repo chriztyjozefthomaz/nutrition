@@ -248,10 +248,18 @@ button { font: inherit; cursor: pointer; }
   transform: scale(1.05);
 }
 
+.meal__timerow { display: flex; align-items: center; gap: 6px; }
 .meal__time {
   font-size: .78rem; color: var(--ink-soft); font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+.who-tag {
+  font-size: .64rem; font-weight: 700; letter-spacing: .03em;
+  padding: 2px 7px; border-radius: 20px;
+  color: #fff;
+}
+.who-tag--A { background: var(--coral); }
+.who-tag--B { background: var(--amber); }
 .meal__title { font-weight: 700; margin: 1px 0 2px; }
 .meal.is-done .meal__title { color: var(--ink-soft); }
 .meal__macros {

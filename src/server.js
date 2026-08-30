@@ -107,15 +107,19 @@ function unsign(token) {
 /* --------------------------------------------------------------- seed */
 
 function seed() {
-  if (db.prepare('SELECT COUNT(*) n FROM users').get().n > 0) return;
   const spec = process.env.SEED_USERS;
   if (!spec) {
-    console.warn('No users exist and SEED_USERS is not set. Nobody can log in yet.');
+    if (db.prepare('SELECT COUNT(*) n FROM users').get().n === 0)
+      console.warn('No users exist and SEED_USERS is not set. Nobody can log in yet.');
     return;
   }
   // format: username:password:Display Name:PLAN:startKg:goalKg:heightCm , comma separated
+  // Existing usernames are left untouched — this only adds ones that are missing,
+  // so a new entry can be appended later without disturbing logged-in accounts.
+  const exists = db.prepare('SELECT 1 FROM users WHERE username = ?');
   for (const row of spec.split(',').map(s => s.trim()).filter(Boolean)) {
     const [username, password, displayName, planKey, sw, gw, h] = row.split(':');
+    if (exists.get(username.toLowerCase())) continue;
     if (!PLANS[planKey]) { console.error('Bad plan key in SEED_USERS:', planKey); continue; }
     createUser({
       username, password, displayName, planKey,
@@ -179,7 +183,7 @@ function summarisePlan(plan) {
   for (const d of DAYS) {
     const meals = plan.week[d];
     week[d] = {
-      meals: meals.map(m => ({ id: m.id, time: m.time, title: m.title, kcal: m.kcal, protein: m.protein, note: m.note, estimate: !!m.estimate })),
+      meals: meals.map(m => ({ id: m.id, time: m.time, title: m.title, kcal: m.kcal, protein: m.protein, note: m.note, estimate: !!m.estimate, plan: m.plan })),
       kcal: meals.reduce((a, m) => a + m.kcal, 0),
       protein: round(meals.reduce((a, m) => a + m.protein, 0), 1)
     };
@@ -208,7 +212,7 @@ app.get('/api/day/:date', requireUser, (req, res) => {
 
   const list = meals.map(m => ({
     id: m.id, time: m.time, title: m.title, kcal: m.kcal, protein: m.protein,
-    note: m.note, estimate: !!m.estimate, done: ticked.has(m.id),
+    note: m.note, estimate: !!m.estimate, done: ticked.has(m.id), plan: m.plan,
     ing: m.ing.map(i => ({ label: i.label, qty: i.qty, unit: i.unit }))
   }));
 

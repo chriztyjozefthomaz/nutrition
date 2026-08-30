@@ -85,7 +85,7 @@ async function boot() {
   if (!me.user) { showSignin(); return; }
   state.user = me.user;
   state.plan = me.plan;
-  state.shop.plans = [me.user.planKey];
+  state.shop.plans = me.user.planKey === 'KITCHEN' ? ['A', 'B'] : [me.user.planKey];
   $('#signin').hidden = true;
   $('#app').hidden = false;
   $('#top-eyebrow').textContent = `${me.user.displayName} · ${me.plan.label}`;
@@ -278,7 +278,10 @@ function mealRow(m) {
   avatar.append(tick);
 
   const mid = el('div');
-  mid.append(el('div', 'meal__time', m.time));
+  const timeRow = el('div', 'meal__timerow');
+  timeRow.append(el('span', 'meal__time', m.time));
+  if (m.plan) timeRow.append(el('span', 'who-tag who-tag--' + m.plan, 'Plan ' + m.plan));
+  mid.append(timeRow);
   mid.append(el('div', 'meal__title', m.title));
   if (m.note) mid.append(el('p', 'meal__note', m.note));
   if (m.ing && m.ing.length) {
@@ -323,7 +326,9 @@ async function viewWeek(v) {
     card.append(head);
     day.meals.forEach(m => {
       const r = el('div', 'weekmeal');
-      r.append(el('span', null, `${m.time}  ${m.title}`));
+      const left = el('span', null, `${m.time}  ${m.title}`);
+      if (m.plan) left.append(el('span', 'who-tag who-tag--' + m.plan, 'Plan ' + m.plan));
+      r.append(left);
       r.append(el('span', null, `${m.kcal} · ${Math.round(m.protein)} g`));
       card.append(r);
     });

@@ -168,6 +168,26 @@ const PLANS = {
   }
 };
 
+/* A shared login for a device that lives in the kitchen — shows both
+   plans' meals together in time order, for meal prep and shopping.
+   Ticking a meal here logs against this account alone, never against
+   either person's own log. */
+PLANS.KITCHEN = {
+  key: 'KITCHEN',
+  label: 'Both plans',
+  targetKcal: PLANS.A.targetKcal + PLANS.B.targetKcal,
+  targetProtein: PLANS.A.targetProtein + PLANS.B.targetProtein,
+  window: 'All day',
+  windowNote: 'Both plans together — each meal tagged with whose it is.',
+  week: Object.fromEntries(DAYS.map(d => [
+    d,
+    [
+      ...PLANS.A.week[d].map(m => ({ ...m, plan: 'A' })),
+      ...PLANS.B.week[d].map(m => ({ ...m, plan: 'B' }))
+    ].sort((x, y) => x.time.localeCompare(y.time))
+  ]))
+};
+
 /* ------------------------------------------------------------- Recipes */
 
 const RECIPES = [

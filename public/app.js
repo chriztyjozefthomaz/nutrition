@@ -97,6 +97,7 @@ async function boot() {
     ? `${me.user.displayName} · ${me.plan.label}`
     : me.plan.label;
   keepScreenOn();
+  startAlarmLoop();
   render();
 }
 
@@ -257,6 +258,7 @@ async function viewToday(v) {
   const d = await api('/day/' + state.date);
   state.day = d;
   drawLedger();
+  checkAlarms();
   v.innerHTML = '';
 
   if (d.kitchen) {
@@ -689,6 +691,126 @@ async function lockLandscape() {
   updateRotateBtn();
   toast('Landscape locked');
 }
+
+/* -------------------------------------------------------- meal alarms */
+/* Kitchen-login only, and only while the app is open — a web page
+   cannot wake a sleeping tablet on a schedule. That is a fair trade
+   here: this login already holds the screen awake on the wall tablet.
+   Timing is polled rather than driven by long setTimeouts, which
+   browsers throttle and let drift over a whole day. */
+
+const ALARM_KEY = 'mealAlarms';
+const alarmsOn = () => localStorage.getItem(ALARM_KEY) === '1';
+const firedAlarms = new Set();
+let alarmCtx = null;
+let alarmTimer = null;
+
+/* Synthesised so there is no audio file to ship or fetch. */
+function chime() {
+  if (!alarmCtx || alarmCtx.state !== 'running') return;
+  const t0 = alarmCtx.currentTime;
+  [[0, 784], [0.26, 784], [0.52, 1046.5]].forEach(([off, hz]) => {
+    const osc = alarmCtx.createOscillator();
+    const gain = alarmCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = hz;
+    gain.gain.setValueAtTime(0.0001, t0 + off);
+    gain.gain.exponentialRampToValueAtTime(0.3, t0 + off + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.5);
+    osc.connect(gain).connect(alarmCtx.destination);
+    osc.start(t0 + off);
+    osc.stop(t0 + off + 0.55);
+  });
+}
+
+/* Audio needs a user gesture before it will play, so the context is
+   created on the enabling tap and revived after any later tap. */
+async function primeAudio() {
+  try {
+    alarmCtx = alarmCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (alarmCtx.state === 'suspended') await alarmCtx.resume();
+  } catch { /* no Web Audio — the banner still shows */ }
+}
+
+function showMealAlarm(time, items) {
+  const who = [...new Set(items.map(i => i.who))].join(' & ');
+  $('#alarm-title').textContent = `${time} — ${who}`;
+  $('#alarm-sub').textContent = items.map(i => `${i.who}: ${i.title}`).join(' · ');
+  $('#mealalarm').hidden = false;
+  chime();
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try { new Notification(`${time} — ${who}`, { body: items.map(i => i.title).join(' · '), tag: 'meal-' + time }); }
+    catch { /* some Android builds refuse constructed notifications */ }
+  }
+}
+
+function checkAlarms() {
+  if (!alarmsOn()) return;
+  const d = state.day;
+  if (!d || !d.kitchen || d.date !== today()) return;
+
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+
+  const byTime = new Map();
+  d.columns.forEach(c => c.meals.forEach(m => {
+    if (!byTime.has(m.time)) byTime.set(m.time, []);
+    byTime.get(m.time).push({ who: c.name, title: m.title });
+  }));
+
+  for (const [time, items] of byTime) {
+    const key = d.date + '|' + time;
+    if (firedAlarms.has(key)) continue;
+    const [h, mm] = time.split(':').map(Number);
+    const mins = h * 60 + mm;
+    /* Only inside the minute it lands, so opening the app at 18:00
+       does not replay every alarm the day already passed. */
+    if (nowMin < mins || nowMin > mins + 1) continue;
+    firedAlarms.add(key);
+    showMealAlarm(time, items);
+  }
+}
+
+function updateAlarmBtn() {
+  const btn = $('#alarm-toggle');
+  btn.hidden = !state.user || state.user.planKey !== 'KITCHEN';
+  const on = alarmsOn();
+  btn.setAttribute('aria-pressed', String(on));
+  const label = on ? 'Meal alarms on' : 'Meal alarms off';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+}
+
+async function toggleAlarms() {
+  if (alarmsOn()) {
+    localStorage.removeItem(ALARM_KEY);
+    updateAlarmBtn();
+    toast('Meal alarms off');
+    return;
+  }
+  await primeAudio();
+  localStorage.setItem(ALARM_KEY, '1');
+  updateAlarmBtn();
+  chime();
+  toast('Meal alarms on');
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => {});
+  }
+}
+
+function startAlarmLoop() {
+  updateAlarmBtn();
+  if (!state.user || state.user.planKey !== 'KITCHEN') return;
+  if (alarmsOn()) primeAudio();
+  clearInterval(alarmTimer);
+  alarmTimer = setInterval(checkAlarms, 20000);
+  checkAlarms();
+}
+
+$('#alarm-toggle').onclick = toggleAlarms;
+$('#alarm-dismiss').onclick = () => { $('#mealalarm').hidden = true; };
+/* A suspended context can only be revived by a gesture, so ride any tap. */
+document.addEventListener('pointerdown', () => { if (alarmsOn()) primeAudio(); });
 
 /* ---------------------------------------------------------- screen on */
 /* The wall tablet should not blank while the app is up. Scoped to the
